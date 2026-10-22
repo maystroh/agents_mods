@@ -1,0 +1,13 @@
+{
+  "name": "agents-mods",
+  "interface": { "displayName": "Agents Mods" },
+  "plugins": [
+    { "name": "brain-dump", "source": { "source": "local", "path": "./codex/plugins/brain-dump" }, "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" }, "category": "Productivity" },
+    { "name": "handoff", "source": { "source": "local", "path": "./codex/plugins/handoff" }, "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" }, "category": "Productivity" },
+    { "name": "reflect", "source": { "source": "local", "path": "./codex/plugins/reflect" }, "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" }, "category": "Productivity" },
+    { "name": "chat-inventory", "source": { "source": "local", "path": "./codex/plugins/chat-inventory" }, "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" }, "category": "Productivity" },
+    { "name": "helper-desk", "source": { "source": "local", "path": "./codex/plugins/helper-desk" }, "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" }, "category": "Productivity" },
+    { "name": "replay-theater", "source": { "source": "local", "path": "./codex/plugins/replay-theater" }, "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" }, "category": "Productivity" },
+    { "name": "screen-share", "source": { "source": "local", "path": "./codex/plugins/screen-share" }, "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" }, "category": "Productivity" }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "helper-desk",
+  "version": "0.1.0",
+  "description": "Codex version of the helper-desk Windows Claude mod",
+  "repository": "https://github.com/maystroh/agents_mods",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "category": "Productivity",
+        "displayName": "helper-desk",
+        "shortDescription": "Codex version of the helper-desk workflow",
+        "developerName": "maystroh"
+      }
+    }
+  }
+}

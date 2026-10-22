@@ -1,2 +1,5 @@
 # agents_mods
-It's place to create interesting mods for codex and claude
+Windows mods for Claude and Codex.
+
+- [Claude Code mods](claude/README.md)
+- [Codex mods](codex/README.md)

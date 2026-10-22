@@ -1,0 +1,17 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "chat-inventory",
+  "version": "0.1.0",
+  "description": "Codex version of the chat-inventory Windows Claude mod",
+  "repository": "https://github.com/maystroh/agents_mods",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "category": "Productivity",
+        "displayName": "chat-inventory",
+        "shortDescription": "Codex version of the chat-inventory workflow",
+        "developerName": "maystroh"
+      }
+    }
+  }
+}
