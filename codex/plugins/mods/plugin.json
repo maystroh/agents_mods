@@ -1,0 +1,8 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "mods",
+  "version": "0.1.0",
+  "description": "In-chat inventory and management for Codex mods from agents_mods.",
+  "repository": "https://github.com/maystroh/agents_mods",
+  "extensions": { "com.openai": { "interface": { "displayName": "Mods", "shortDescription": "Inspect and manage Codex mods", "developerName": "maystroh", "category": "Productivity" } } }
+}

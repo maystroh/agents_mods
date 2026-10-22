@@ -1,6 +1,6 @@
 # Codex Mods for Windows
 
-Codex-native workflows adapted from the nine [Claude Windows mods](../claude/README.md) in this repository. The seven supported counterparts are separate Codex skill plugins, so each can be enabled or removed independently. They work in Codex CLI and the desktop app without depending on Claude's React hook runtime.
+Codex-native workflows adapted from the nine [Claude Windows mods](../claude/README.md) in this repository. The eight supported counterparts are separate Codex skill plugins, so each can be enabled or removed independently. They work in Codex CLI and the desktop app without depending on Claude's React hook runtime.
 
 | Claude mod | Codex counterpart | Limit |
 | --- | --- | --- |
@@ -12,7 +12,7 @@ Codex-native workflows adapted from the nine [Claude Windows mods](../claude/REA
 | replay-theater | `$replay-theater` walks the last-turn or Git diff | Review panel or chat, not a custom theater |
 | screen-share | `$screen-share` produces a redacted copy | Cannot mask the live Codex UI |
 | cache-clock | No port | Codex does not expose reliable cache TTL or a background model fork to plugins |
-| mods | Native Codex Plugins Directory and `codex plugin` commands | No in-chat switchboard UI |
+| mods | `$mods` lists and manages plugins in chat | No custom switchboard pane or per-chat toggle |
 
 ## Install
 
@@ -20,10 +20,10 @@ The repository includes a Codex marketplace at `.agents/plugins/marketplace.json
 
 ```powershell
 codex plugin marketplace add maystroh/agents_mods
-$mods = 'brain-dump','handoff','reflect','chat-inventory','helper-desk','replay-theater','screen-share'
+$mods = 'brain-dump','handoff','reflect','chat-inventory','helper-desk','replay-theater','screen-share','mods'
 $mods | ForEach-Object { codex plugin add "${_}@agents-mods" }
 ```
 
-Restart Codex desktop after installation. The skills are then available as `$brain-dump`, `$handoff`, `$reflect`, `$chat-inventory`, `$helper-desk`, `$replay-theater`, and `$screen-share`. Ask for a workflow in ordinary language to let Codex select a skill automatically.
+Restart Codex desktop after installation. The skills are then available as `$brain-dump`, `$handoff`, `$reflect`, `$chat-inventory`, `$helper-desk`, `$replay-theater`, `$screen-share`, and `$mods`. Ask for a workflow in ordinary language to let Codex select a skill automatically.
 
 Use `codex plugin list` and `codex plugin marketplace list` to inspect the installation. To refresh a Git-backed marketplace after a repository update, use `codex plugin marketplace upgrade agents-mods` and reinstall or update the plugin through Codex.
