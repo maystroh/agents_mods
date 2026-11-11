@@ -4,7 +4,7 @@ Linux copy of the Windows mods in [`../claude`](../claude/README.md). The change
 
 ## Status
 
-All nine mods install and load in Claude Code 2.1.309 on Linux (checked with `claude plugin validate` and a `--debug` run: every hooks module loaded, no errors). Their panes, bars and buttons were not seen on screen, because that check ran in a cloud session with no terminal.
+All nine mods install and load in Claude Code 2.1.309 on Linux (checked with `claude plugin validate` and a `--debug` run: every hooks module loaded, no errors). Their panes, bars and buttons were not seen on screen, because that check ran in a cloud session with no terminal. effort-optimizer was added later and was not checked on Linux.
 
 ## Install
 

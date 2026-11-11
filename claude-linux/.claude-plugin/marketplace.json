@@ -3,7 +3,7 @@
   "owner": {
     "name": "Team mods"
   },
-  "description": "Nine Claude Code mods for everyday knowledge work: prompt shaping, a task bar, a cache clock, handoffs, saved rules, side panes, screen-share hiding, an edit replay and a /mods switchboard",
+  "description": "Ten Claude Code mods for everyday knowledge work: prompt shaping, a task bar, a cache clock, handoffs, saved rules, side panes, screen-share hiding, an edit replay, an effort picker and a /mods switchboard",
   "plugins": [
     {
       "name": "brain-dump",
@@ -22,6 +22,12 @@
       "source": "./plugins/chat-inventory",
       "description": "A side pane, In this chat, that lists the to-do list, connectors, context files and skills this chat used",
       "version": "0.2.0"
+    },
+    {
+      "name": "effort-optimizer",
+      "source": "./plugins/effort-optimizer",
+      "description": "Reads each prompt, picks the effort level it needs with Ben's four-question framework, and offers Switch to that level, or sets it by itself in auto mode",
+      "version": "0.1.0"
     },
     {
       "name": "handoff",
