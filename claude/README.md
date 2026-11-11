@@ -4,6 +4,8 @@ These mods are a Windows version of the mods proposed in this video: https://www
 
 The original set (nine mods: brain-dump, helper-desk, cache-clock, handoff, reflect, chat-inventory, screen-share, replay-theater, mods) assumes macOS. This copy changes the Mac-only parts so they run on Windows. The changes are listed in [WINDOWS-CHANGES.md](WINDOWS-CHANGES.md); the original README is kept as [README-original.md](README-original.md).
 
+`effort-optimizer` was added later, from Ben AI's separate `benai-effort-optimizer` zip. It picks the effort level for each prompt, to save usage on easy prompts. Its own README is [plugins/effort-optimizer/README.md](plugins/effort-optimizer/README.md).
+
 `replay-theater` is Anthropic's sample mod, shared under Apache 2.0 (see `plugins/replay-theater/LICENSE`).
 
 ## Status
@@ -25,6 +27,7 @@ Needs Claude Code 2.1.287+ and Python 3 (`python` or `py`) for cache-clock. In a
 /plugin install screen-share@benai-mods
 /plugin install replay-theater@benai-mods
 /plugin install mods@benai-mods
+/plugin install effort-optimizer@benai-mods
 /reload-plugins
 ```
 

@@ -13,6 +13,7 @@ Codex-native workflows adapted from the nine [Claude Windows mods](../claude/REA
 | screen-share | `$screen-share` produces a redacted copy | Cannot mask the live Codex UI |
 | cache-clock | No port | Codex does not expose reliable cache TTL or a background model fork to plugins |
 | mods | `$mods` lists and manages plugins in chat | No custom switchboard pane or per-chat toggle |
+| effort-optimizer | No port | Codex plugins cannot change the reasoning effort of each request |
 
 ## Install
 
