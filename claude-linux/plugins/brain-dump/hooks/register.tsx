@@ -56,6 +56,7 @@ Return JSON only, no prose, no code fences, in exactly this shape:
 
 Rules:
 - 0 to 3 questions. When the dump is clear, return {"questions":[]}. Fewer is better.
+- THE WHY: if the dump does not say what the result is for (who uses it and for what), the first question must ask that, for example "What is this for?", with 2 or 3 likely uses as options. This question always counts as a real gap.
 - Never ask about something the dump already answers, and never ask about style or nice-to-haves.
 - For a conflict, name both sides in the question and offer each side as an option.
 - Each question has 2 or 3 short options (1 to 5 words), taken from the dump where possible. No "Other" option; the person can type their own.
