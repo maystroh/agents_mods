@@ -1,7 +1,7 @@
 {
   "name": "task-budget",
-  "version": "0.8.0",
-  "description": "Know what a task will cost before Claude starts. The mod gives a likely cost with odds from your own past chats, advises a cheaper model or effort level when the task fits one, counts the real cost live, and pauses the chat before a dollar limit is passed. It learns from every task. Past chats are read on this machine only, after you say yes.",
+  "version": "0.8.1",
+  "description": "Know what a task will cost before Claude starts. The mod gives a likely cost with odds from your own past chats, advises a cheaper model or effort level when the task fits one, counts the real cost live, and pauses the chat before a dollar limit is passed. It learns from every task. Past chats are read on this machine, after you say yes; an estimate sends the model up to 5 short pieces of matching past prompts.",
   "author": {
     "name": "Ben AI"
   },

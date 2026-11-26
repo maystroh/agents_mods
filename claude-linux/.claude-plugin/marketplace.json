@@ -69,7 +69,7 @@
       "name": "task-budget",
       "source": "./plugins/task-budget",
       "description": "Estimates what a task will cost before Claude starts, counts the real cost live, and pauses the chat before a dollar limit. Type /budget and your task",
-      "version": "0.8.0"
+      "version": "0.8.1"
     }
   ]
 }

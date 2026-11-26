@@ -178,10 +178,17 @@ export function registerViews(on: Parameters<Register>[0]): void {
             <Text>The Handoff panel above the prompt box writes a full handoff of this chat. Press Start new chat there, then pick {card.model}.</Text>
           ) : (
             <Text>
-              {card.isCopied ? 'The handoff note is copied.' : 'The copy did not work. Copy the note from the file below.'} Open a new chat, pick {card.model}, and paste the note.
+              {card.isCopied ? 'The handoff note is copied.' : card.file ? 'The copy did not work. Copy the note from the file below.' : 'The copy and the save did not work. Copy the note below.'} Open a new chat, pick {card.model}, and paste the note.
             </Text>
           )}
-          <Text dimColor>{card.isPanel ? 'A short note is also in' : 'The note is also in'} {card.file}. Claude stopped here. No work is lost.</Text>
+          {card.file ? (
+            <Text dimColor>{card.isPanel ? 'A short note is also in' : 'The note is also in'} {card.file}. Claude stopped here. No work is lost.</Text>
+          ) : (
+            <>
+              <Text>{card.note}</Text>
+              <Text dimColor>Claude stopped here. No work is lost.</Text>
+            </>
+          )}
         </Box>
       )
     }

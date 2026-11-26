@@ -55,6 +55,8 @@ async function budgetCommand($: Parameters<typeof cur>[0], argsIn: string): Prom
   }
   if (args === 'learn off') {
     await setScan($, 'no')
+    // A scan that runs now stops before its next chat (scanChunk checks again).
+    mem.job = null
     return 'The mod does not read your past chats. The estimates use the 430 measured tasks and the tasks you run with /budget.'
   }
 

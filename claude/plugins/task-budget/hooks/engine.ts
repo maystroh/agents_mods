@@ -372,6 +372,13 @@ export async function scanChunk($: EngineInterface): Promise<void> {
     return
   }
   const lock = await fileOf($, LOCK)
+  // The person may have typed /budget learn off since the scan started: stop before reading another chat.
+  if (!(await isLearnOn($))) {
+    mem.job = null
+    await $.fs.write(lock, JSON.stringify({ id: '', at: 0 })).catch(() => undefined)
+    await refreshView($, 'ready', '')
+    return
+  }
   await $.fs.write(lock, JSON.stringify({ id: job.sid, at: await $.clock.now() })).catch(() => undefined)
   const p = await scanSome(ioOf($), book, job.files, { maxFiles: 4, maxBytes: 48_000_000 })
   job.read += p.read + p.skipped
@@ -397,6 +404,15 @@ export async function showProfile($: EngineInterface, days: number): Promise<voi
   $.ui.toast(profileLine(profile))
 }
 
+/** False once the person said no to reading past chats (/budget learn off or Not now). */
+export async function isLearnOn($: EngineInterface): Promise<boolean> {
+  try {
+    return (await loadLog($)).scan !== 'no'
+  } catch {
+    return true
+  }
+}
+
 /** Save the answer to the first-run question. */
 export async function setScan($: EngineInterface, scan: 'yes' | 'no'): Promise<void> {
   const log = await loadLog($)
@@ -406,6 +422,7 @@ export async function setScan($: EngineInterface, scan: 'yes' | 'no'): Promise<v
 /** Start to read the past chats the book has not read. Newest first. Returns a line for the person. */
 export async function scanStart($: EngineInterface, opts: { days?: number; profile?: boolean } = {}): Promise<string> {
   if (mem.job) return 'The mod is reading your past chats now.'
+  if (!(await isLearnOn($))) return 'Reading past chats is off. Type /budget learn to turn it on.'
   const now = await $.clock.now()
   let sid = ''
   try {
@@ -1160,7 +1177,7 @@ export async function firstRun($: EngineInterface, token: string): Promise<void>
     answer = await $.ui.ask(
       [
         `Read your last ${SCAN_DAYS} days of chats to learn how you work?`,
-        'Yes: the mod reads the chat files on this computer. It learns your kinds of task, what each costs, and which models and effort levels you use. Nothing leaves this computer.',
+        'Yes: the mod reads the chat files on this computer. It learns your kinds of task, what each costs, and which models and effort levels you use. What it learns stays on this computer, but an estimate for a /budget task sends the model up to 5 short pieces (160 characters each) of your past prompts that look like the new task, from any project.',
         'Not now: the estimates start from 430 measured tasks. You can run it later with /budget learn.',
         ...(baseLine ? [baseLine] : []),
       ].join('\n'),
@@ -1971,11 +1988,20 @@ export async function handoff($: EngineInterface, b: Budget, spent: number, isIn
       isCopied = false
     }
   }
-  const file = await fileOf($, HANDOFF_FILE)
-  await $.fs.write(file, note + '\n').catch(() => undefined)
+  const path = await fileOf($, HANDOFF_FILE)
+  const isSaved = await $.fs.write(path, note + '\n').then(() => true, () => false)
+  // An old note may still be in the file: name the file only when this note is in it.
+  const file = isSaved ? path : ''
   await update($, budget, c0 => (live(c0)?.id === b.id ? { ...(live(c0) ?? b), spent, isPaused: true, isMidTurn: true, isHandedOff: true, waiting: '', ask: null } : c0))
   $.ui.status(statusText({ ...b, spent, isPaused: true }))
-  $.ui.toast(isCopied ? `Handoff note copied. Open a new chat on ${word} and paste it.` : `The copy did not work. The note is in ${file}. Open a new chat on ${word} and paste it.`)
+  $.ui.toast(
+    isCopied
+      ? `Handoff note copied. Open a new chat on ${word} and paste it.`
+      : isSaved
+        ? `The copy did not work. The note is in ${file}. Open a new chat on ${word} and paste it.`
+        : `The copy and the save did not work. The note is in the card in the chat. Open a new chat on ${word} and paste it.`,
+  )
+  // With no copy and no file, the card shows the note itself, so it is not lost when the agents stop.
   await placeCard($, `hand-${b.id}-${b.steps}`, { kind: 'handoff', note, model: word, isCopied, file })
   void saveRun($, runOf({ ...b, spent }, 'stopped', iso(await $.clock.now()))).catch(() => undefined)
   await stopAgents($, b, { isAbort: !isInStep })

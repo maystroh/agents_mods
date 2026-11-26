@@ -128,7 +128,7 @@ type World = {
 /** What the mod wrote with $.ui.log since the last /budget. The model never sees this text. */
 let logged: string[] = []
 
-type Opts = { model?: string; tokens?: number | null; breakdown?: number; /** Added for fix 3: the rows of each breakdown call, by its number from 0. */ rows?: (i: number) => object[]; cwd?: string; messages?: unknown[]; files?: Record<string, string>; answer?: string | null; hasExists?: boolean }
+type Opts = { model?: string; tokens?: number | null; breakdown?: number; /** Added for fix 3: the rows of each breakdown call, by its number from 0. */ rows?: (i: number) => object[]; cwd?: string; messages?: unknown[]; files?: Record<string, string>; answer?: string | null; hasExists?: boolean; /** Review fix: no clipboard, and writes to paths it matches fail. */ noCopy?: boolean; failWrite?: RegExp }
 
 /**
  * A session that has spent `usd` so far. `tokens: null` is a chat before its first answer.
@@ -154,6 +154,7 @@ function engine(on: On, usd: number, opts: Opts = {}): World {
     return { value: undefined }
   }) as never)
   on('ui.copy', ((_: unknown, e: any) => {
+    if (opts.noCopy) return { value: { isCopied: false } }
     w.copied.push(String(e.text))
     return { value: { isCopied: true } }
   }) as never)
@@ -179,6 +180,7 @@ function engine(on: On, usd: number, opts: Opts = {}): World {
   // An empty text reads like a file that is not there: the mod then starts from nothing.
   on('fs.read', ((_: unknown, e: any) => ({ value: w.files.get(e.path) ?? '' })) as never)
   on('fs.write', ((_: unknown, e: any) => {
+    if (opts.failWrite?.test(String(e.path))) throw new Error('disk full')
     w.files.set(e.path, String(e.text))
     w.writes.push({ path: e.path, text: String(e.text) })
     return { value: undefined }
@@ -3757,4 +3759,15 @@ test('dry run of the paid test, real order: a big first request, 3 subagents, on
   expect(b?.asks?.length).toBe(1)
   expect(seen.stops.sort()).toEqual(['sub-1', 'sub-2', 'sub-3'])
   expect(seen.aborts).toEqual(['main-1'])
+})
+
+test('review fix: with no clipboard and no file, the handoff card holds the note and the toast says so', async ($, on) => {
+  const w = engine(on, 5.3, { noCopy: true, failWrite: /task-budget-handoff\.md$/ })
+  store(on, { budget: running({ isPaused: true, isMidTurn: true, spent: 5.3, ownSpend: 5.3 }) })
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  await ui.press({ key: 'handoff' })
+  expect(w.files.has(fileAt('task-budget-handoff.md'))).toBe(false)
+  expect(w.toasts).toContain('The copy and the save did not work. The note is in the card in the chat. Open a new chat on Sonnet and paste it.')
+  expect(w.placed.some(id => id.startsWith('hand-b1-'))).toBe(true)
+  await ui.unmount()
 })
