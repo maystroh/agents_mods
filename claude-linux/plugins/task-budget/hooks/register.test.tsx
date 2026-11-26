@@ -2439,7 +2439,7 @@ test('/budget panel opens the panel, and /budget learn with no past chats says s
   store(on)
   expect((await cmd($, 'panel'))?.text).toBe('Budget panel opened.')
   expect((await cmd($, 'open'))?.text).toBe('Budget panel opened.')
-  expect((await cmd($, 'learn'))?.text).toBe('There are no past chats to read yet.')
+  expect((await cmd($, 'learn'))?.text).toBe('There are no past chats to read yet.\nAn estimate now sends the model up to 5 short pieces (160 characters each) of your past prompts that look like the new task, from any project. /budget learn off stops that.')
 })
 
 async function planTool($: unknown, input: Record<string, unknown>): Promise<string> {
@@ -3768,6 +3768,29 @@ test('review fix: with no clipboard and no file, the handoff card holds the note
   await ui.press({ key: 'handoff' })
   expect(w.files.has(fileAt('task-budget-handoff.md'))).toBe(false)
   expect(w.toasts).toContain('The copy and the save did not work. The note is in the card in the chat. Open a new chat on Sonnet and paste it.')
+  // The last word the person sees is the real result, not "copied".
+  expect(w.toasts[w.toasts.length - 1]).toBe('The copy and the save did not work. The note is in the card in the chat. Open a new chat on Sonnet and paste it.')
+  expect(w.toasts.some(t => t.startsWith('Handoff note copied'))).toBe(false)
   expect(w.placed.some(id => id.startsWith('hand-b1-'))).toBe(true)
   await ui.unmount()
+})
+
+test('review fix: a yes saved before 0.8.1 asks again, and sends no past prompts until then', async ($, on) => {
+  const w = engine(on, 1.47, { tokens: 100_000, answer: JSON.stringify(ANSWER), files: { 'task-budget-history.json': JSON.stringify({ runs: [], scan: 'yes' }) } })
+  store(on)
+  const p = person(on, ['Not now'], 'Not now')
+  await cmd($, 'fix the report in the files')
+  await w.clock.advance(100)
+  await w.clock.settle()
+  expect(p.scans.length).toBe(1)
+  expect(String(p.scans[0]?.question)).toContain('up to 5 short pieces')
+  expect(JSON.parse(String(w.files.get(fileAt('task-budget-history.json')))).scan).toBe('no')
+  expect(w.asked.every(a => !String(a.prompt ?? '').includes('PAST TASKS OF THIS USER, WITH REAL COUNTS'))).toBe(true)
+})
+
+test('review fix: /budget learn says that estimates send pieces of past prompts', async ($, on) => {
+  engine(on, 1.47, { tokens: 100_000, answer: JSON.stringify(ANSWER) })
+  store(on)
+  const out = await cmd($, 'learn')
+  expect(out?.text).toContain('up to 5 short pieces')
 })

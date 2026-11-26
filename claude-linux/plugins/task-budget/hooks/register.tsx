@@ -5,6 +5,9 @@ import type { Budget } from '../types'
 import { family } from './book.ts'
 import { AGENT_STOP_DENY, FORK_DENY, addPoint, markStepStarts, todoPart, SPAWN_STOP_DENY, agentModel, helperStep, isBigModel, spawnModel, HELP, HELPER_DENY, HELPER_STOP, HELPER_WRAP, HOUR, LAND_DENY, HANDED_OFF, STOPPED, budgetCall, listRank, planFromTodos, stepMark, afterStep, charge, callLine, closeOutcome, countTools, estimateLine, fits, forecast, freshFrom, gateWhy, isPlanDone, live, mustAskEarly, mustAskNear, inlineIn, priceOf, promptOf, recentOf, reserveSpent, runOf, scoreOf, spentOf, statusText, testInline, testToken, todosFrom, usd, viewOf, type Fresh } from './core.ts'
 import { addSpawn, askHandoff, upgradeMemory, holdAgents, judgeHelper, regrow, releaseAgents, stopAgents, askGate, billNow, ledgerAfter, changeLimit, checkSoon, clearOffer, closeWithCard, cur, estimate, finish, folder, helperEst, helperRatio, helperUse, helperWarned, iso, isStill, keepGoing, kOf, land, learnLine, measureIdle, noteStart, loadBook, loadLog, mainEst, markFirst, measure, mem, offerSoon, openPanel, pause, placeCard, pricesText, raise, refreshView, runLine, saveRun, scanStart, SCAN_DAYS, setScan, start, type Started, unsent, type Usage } from './engine.ts'
+
+/** Added in 0.8.1: what turning learning on also means for the estimates. */
+const LEARN_NOTE = 'An estimate now sends the model up to 5 short pieces (160 characters each) of your past prompts that look like the new task, from any project. /budget learn off stops that.'
 import { registerViews } from './view.tsx'
 
 // The engine wants these names written in the file that reads and writes them.
@@ -47,11 +50,11 @@ async function budgetCommand($: Parameters<typeof cur>[0], argsIn: string): Prom
   // "/budget learn": read the last 7 days of chats, and show what they say. "/budget learn all": read every past chat.
   if (args === 'learn') {
     await setScan($, 'yes')
-    return scanStart($, { days: SCAN_DAYS, profile: true })
+    return `${await scanStart($, { days: SCAN_DAYS, profile: true })}\n${LEARN_NOTE}`
   }
   if (args === 'learn all') {
     await setScan($, 'yes')
-    return scanStart($)
+    return `${await scanStart($)}\n${LEARN_NOTE}`
   }
   if (args === 'learn off') {
     await setScan($, 'no')

@@ -357,7 +357,7 @@ export function registerViews(on: Parameters<Register>[0]): void {
           </Text>
           <Box flexDirection="row" gap={1}>
             <Button key="raise" label={`Raise the limit to ${usd(to)}`} variant="primary" onPress={async () => { $.ui.toast((await changeLimit($, to)).text) }} />
-            {cheaper && !b.isHandedOff ? <Button key="handoff" label="Hand off to a cheaper model" onPress={async () => { $.ui.toast(await handoffNow($)) }} /> : null}
+            {cheaper && !b.isHandedOff ? <Button key="handoff" label="Hand off to a cheaper model" onPress={async () => { const t = await handoffNow($); if (t) $.ui.toast(t) }} /> : null}
             <Button key="end" label="End budget" onPress={async () => { $.ui.toast(await endNow($)) }} />
             <Button key="panel" label="Open Budget Panel" onPress={() => openPanel($)} />
           </Box>
@@ -993,7 +993,7 @@ export function registerViews(on: Parameters<Register>[0]): void {
             // Changed in the subagent fixes: the same buttons as the pause question.
             <Box flexDirection="row" gap={1}>
               <Button key="raise" label={`Raise the limit to ${usd(raiseTo(b, perRequest(b), f))}`} variant={b.isPaused ? 'primary' : 'secondary'} onPress={async () => { $.ui.toast((await changeLimit($, raiseTo(b, perRequest(b), forecast(b)))).text) }} />
-              {handoffModel(b.lastModel || b.model) && !b.isHandedOff ? <Button key="handoff" label="Hand off to a cheaper model" onPress={async () => { $.ui.toast(await handoffNow($)) }} /> : null}
+              {handoffModel(b.lastModel || b.model) && !b.isHandedOff ? <Button key="handoff" label="Hand off to a cheaper model" onPress={async () => { const t = await handoffNow($); if (t) $.ui.toast(t) }} /> : null}
               {b.isPaused ? <Button key="end" label="End budget" onPress={async () => { $.ui.toast(await endNow($)) }} /> : <Button key="stop" label="Stop" onPress={async () => { $.ui.toast(await stopNow($)) }} />}
             </Box>
           )}

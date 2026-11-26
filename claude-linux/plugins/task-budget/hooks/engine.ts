@@ -56,7 +56,7 @@ export const PASS_BYTES = 1_500_000_000
 
 /** The history file. `base`: the real size of a first request, by folder. `calib`: real size over the engine's count. `tune`: real cost over estimate. */
 /** `scan` (0.7.0): the answer to the first-run question. Not set: the question was not answered yet. */
-export type Log = { runs: Run[]; base: Record<string, Base>; calib: Calib; tune: Tune; scan?: 'yes' | 'no'; /** Added in 0.8.0. Loaded from a history file that is there but cannot be read: never saved. */ isBroken?: true }
+export type Log = { runs: Run[]; base: Record<string, Base>; calib: Calib; tune: Tune; scan?: 'yes' | 'no'; /** Added in 0.8.1: 2 once the person said yes to the question that names the excerpts an estimate sends. */ scanV?: number; /** Added in 0.8.0. Loaded from a history file that is there but cannot be read: never saved. */ isBroken?: true }
 export type Usage = Awaited<ReturnType<EngineInterface['session']['usage']>>
 export type Job = { files: SessionFile[]; read: number; bytes0: number; sid: string; /** Show the summary of this many days when the read is done. */ profile?: number }
 /** What an estimate was made from. With it, code prices the same work again for another model or effort level, with no second model call. */
@@ -211,6 +211,7 @@ function logOf(text: string): Log {
     calib: raw.calib && typeof raw.calib.n === 'number' ? raw.calib : { n: 0, idle: 0, step: 0 },
     tune: raw.tune && typeof raw.tune === 'object' ? raw.tune : {},
     ...(raw.scan === 'yes' || raw.scan === 'no' ? { scan: raw.scan } : {}),
+    ...(typeof raw.scanV === 'number' ? { scanV: raw.scanV } : {}),
   }
 }
 
@@ -254,7 +255,7 @@ export async function saveLog($: EngineInterface, log: Log): Promise<void> {
   if (log.isBroken) return
   try {
     const base = Object.fromEntries(Object.entries(log.base).slice(-60))
-    const text = JSON.stringify({ runs: log.runs.slice(-200), base, calib: log.calib, tune: log.tune, ...(log.scan ? { scan: log.scan } : {}) }, null, 1)
+    const text = JSON.stringify({ runs: log.runs.slice(-200), base, calib: log.calib, tune: log.tune, ...(log.scan ? { scan: log.scan } : {}), ...(log.scanV ? { scanV: log.scanV } : {}) }, null, 1)
     await $.fs.write(await fileOf($, LOG), text)
     await $.fs.write(await fileOf($, LOG_BAK), text)
   } catch {
@@ -380,7 +381,7 @@ export async function scanChunk($: EngineInterface): Promise<void> {
     return
   }
   await $.fs.write(lock, JSON.stringify({ id: job.sid, at: await $.clock.now() })).catch(() => undefined)
-  const p = await scanSome(ioOf($), book, job.files, { maxFiles: 4, maxBytes: 48_000_000 })
+  const p = await scanSome(ioOf($), book, job.files, { maxFiles: 4, maxBytes: 48_000_000, isStopped: () => mem.job !== job })
   job.read += p.read + p.skipped
   settle(book, await $.clock.now())
   await saveBook($, book)
@@ -404,6 +405,9 @@ export async function showProfile($: EngineInterface, days: number): Promise<voi
   $.ui.toast(profileLine(profile))
 }
 
+/** The version of the consent question. 2: it names the excerpts an estimate sends. */
+export const SCAN_V = 2
+
 /** False once the person said no to reading past chats (/budget learn off or Not now). */
 export async function isLearnOn($: EngineInterface): Promise<boolean> {
   try {
@@ -416,7 +420,7 @@ export async function isLearnOn($: EngineInterface): Promise<boolean> {
 /** Save the answer to the first-run question. */
 export async function setScan($: EngineInterface, scan: 'yes' | 'no'): Promise<void> {
   const log = await loadLog($)
-  await saveLog($, { ...log, scan })
+  await saveLog($, { ...log, scan, scanV: SCAN_V })
 }
 
 /** Start to read the past chats the book has not read. Newest first. Returns a line for the person. */
@@ -1085,7 +1089,8 @@ export async function estimate($: EngineInterface, task: string): Promise<Made> 
   }
   const effort = await effortNow($)
   const facts: Facts = { model, ctx, isCold: isFresh, before: await lastAnswer($), ...(effort ? { effort } : {}) }
-  const matches = book ? similarTurns(book.turns, task, 5) : []
+  // Pieces of past prompts go to the model only after a yes to the question that says so (0.8.1).
+  const matches = book && log.scan === 'yes' && log.scanV === SCAN_V ? similarTurns(book.turns, task, 5) : []
   // Added in the subagent fixes (fix 13): the learning memory. Never fatal.
   const memo = await readMemory($, task).catch(() => null)
   let paidFor = 0
@@ -1157,7 +1162,8 @@ export const SCAN_DAYS = 7
 export async function firstRun($: EngineInterface, token: string): Promise<void> {
   if (token) return
   const log = await loadLog($)
-  if (log.scan) return
+  // A yes given before 0.8.1 did not name the excerpts an estimate sends: ask again.
+  if (log.scan === 'no' || (log.scan === 'yes' && log.scanV === SCAN_V)) return
   // The chat start is different for each person: measure it now, so the first estimate has the real number.
   let baseLine = ''
   try {
@@ -2075,8 +2081,9 @@ export async function handoffNow($: EngineInterface): Promise<string> {
   if (!b) return HELP
   if (!handoffModel(b.lastModel || b.model)) return 'This task already runs on the cheapest model. Choose Raise the limit or Stop.'
   const usage = await $.session.usage()
+  // handoff() shows the real result (copied, saved, or neither) itself, so nothing more is said here.
   await handoff($, b, spentOf(b, usage.cost?.usd))
-  return mem.handoffAsk || (await handoffRequest($)) ? 'The Handoff panel opens above the prompt box.' : 'Handoff note copied. Open a new chat on a cheaper model and paste it.'
+  return ''
 }
 
 
