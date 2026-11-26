@@ -56,7 +56,7 @@ export const PASS_BYTES = 1_500_000_000
 
 /** The history file. `base`: the real size of a first request, by folder. `calib`: real size over the engine's count. `tune`: real cost over estimate. */
 /** `scan` (0.7.0): the answer to the first-run question. Not set: the question was not answered yet. */
-export type Log = { runs: Run[]; base: Record<string, Base>; calib: Calib; tune: Tune; scan?: 'yes' | 'no'; /** Added in 0.8.0. Loaded from a history file that is there but cannot be read: never saved. */ isBroken?: true }
+export type Log = { runs: Run[]; base: Record<string, Base>; calib: Calib; tune: Tune; scan?: 'yes' | 'no'; /** Added in 0.8.1: 2 once the person said yes to the question that names the excerpts an estimate sends. */ scanV?: number; /** Added in 0.8.0. Loaded from a history file that is there but cannot be read: never saved. */ isBroken?: true }
 export type Usage = Awaited<ReturnType<EngineInterface['session']['usage']>>
 export type Job = { files: SessionFile[]; read: number; bytes0: number; sid: string; /** Show the summary of this many days when the read is done. */ profile?: number }
 /** What an estimate was made from. With it, code prices the same work again for another model or effort level, with no second model call. */
@@ -199,6 +199,8 @@ export async function isFreshChat($: EngineInterface, usage: Usage): Promise<boo
 
 /** Added in 0.8.0. The copy of the last good history. The mod reads it when the main file cannot be read. */
 export const LOG_BAK = `${LOG}.bak`
+/** Added in 0.8.1: the answer about reading past chats, in a file of its own, so a history write can never undo it. */
+export const CONSENT = 'task-budget-consent.json'
 
 const EMPTY_LOG = (): Log => ({ runs: [], base: {}, calib: { n: 0, idle: 0, step: 0 }, tune: {} })
 
@@ -211,6 +213,7 @@ function logOf(text: string): Log {
     calib: raw.calib && typeof raw.calib.n === 'number' ? raw.calib : { n: 0, idle: 0, step: 0 },
     tune: raw.tune && typeof raw.tune === 'object' ? raw.tune : {},
     ...(raw.scan === 'yes' || raw.scan === 'no' ? { scan: raw.scan } : {}),
+    ...(typeof raw.scanV === 'number' ? { scanV: raw.scanV } : {}),
   }
 }
 
@@ -254,7 +257,7 @@ export async function saveLog($: EngineInterface, log: Log): Promise<void> {
   if (log.isBroken) return
   try {
     const base = Object.fromEntries(Object.entries(log.base).slice(-60))
-    const text = JSON.stringify({ runs: log.runs.slice(-200), base, calib: log.calib, tune: log.tune, ...(log.scan ? { scan: log.scan } : {}) }, null, 1)
+    const text = JSON.stringify({ runs: log.runs.slice(-200), base, calib: log.calib, tune: log.tune, ...(log.scan ? { scan: log.scan } : {}), ...(log.scanV ? { scanV: log.scanV } : {}) }, null, 1)
     await $.fs.write(await fileOf($, LOG), text)
     await $.fs.write(await fileOf($, LOG_BAK), text)
   } catch {
@@ -372,8 +375,15 @@ export async function scanChunk($: EngineInterface): Promise<void> {
     return
   }
   const lock = await fileOf($, LOCK)
+  // The person may have typed /budget learn off since the scan started: stop before reading another chat.
+  if (!(await isLearnOn($))) {
+    mem.job = null
+    await $.fs.write(lock, JSON.stringify({ id: '', at: 0 })).catch(() => undefined)
+    await refreshView($, 'ready', '')
+    return
+  }
   await $.fs.write(lock, JSON.stringify({ id: job.sid, at: await $.clock.now() })).catch(() => undefined)
-  const p = await scanSome(ioOf($), book, job.files, { maxFiles: 4, maxBytes: 48_000_000 })
+  const p = await scanSome(ioOf($), book, job.files, { maxFiles: 4, maxBytes: 48_000_000, isStopped: async () => mem.job !== job || !(await isLearnOn($)) })
   job.read += p.read + p.skipped
   settle(book, await $.clock.now())
   await saveBook($, book)
@@ -397,15 +407,106 @@ export async function showProfile($: EngineInterface, days: number): Promise<voi
   $.ui.toast(profileLine(profile))
 }
 
-/** Save the answer to the first-run question. */
-export async function setScan($: EngineInterface, scan: 'yes' | 'no'): Promise<void> {
+/** Added in 0.8.1. The learning memory with its "## Sample tasks" blocks left out: those are the person's own words. */
+export function withoutSamples(text: string): string {
+  const out: string[] = []
+  let isSample = false
+  for (const line of text.split('\n')) {
+    if (line === '## Sample tasks') isSample = true
+    else if (isSample && line.startsWith('- ')) continue
+    else isSample = false
+    if (!isSample) out.push(line)
+  }
+  return out.join('\n')
+}
+
+/** The version of the consent question. 2: it names the excerpts an estimate sends. */
+export const SCAN_V = 2
+
+export type Consent = { scan?: 'yes' | 'no'; scanV?: number }
+
+/**
+ * Added in 0.8.1. The answer about reading past chats. The consent file wins; with no consent file
+ * (an answer from before 0.8.1) the history file's old answer counts. A consent file that cannot be read counts as no.
+ */
+export async function readConsent($: EngineInterface): Promise<Consent> {
+  let text = ''
+  try {
+    text = String((await $.fs.read(await fileOf($, CONSENT))) ?? '')
+  } catch (err) {
+    if (!isMissing(err)) return { scan: 'no' }
+  }
+  if (text.trim()) {
+    try {
+      const raw = JSON.parse(text) as Consent
+      if (raw.scan === 'yes' || raw.scan === 'no') return { scan: raw.scan, ...(typeof raw.scanV === 'number' ? { scanV: raw.scanV } : {}) }
+    } catch {
+      // a broken consent file
+    }
+    return { scan: 'no' }
+  }
   const log = await loadLog($)
-  await saveLog($, { ...log, scan })
+  return { ...(log.scan ? { scan: log.scan } : {}), ...(log.scanV ? { scanV: log.scanV } : {}) }
+}
+
+/** A yes to the question that names the pieces of past prompts an estimate sends. */
+export function isCurrentYes(c: Consent): boolean {
+  return c.scan === 'yes' && c.scanV === SCAN_V
+}
+
+/** False once the person said no to reading past chats (/budget learn off or Not now). */
+export async function isLearnOn($: EngineInterface): Promise<boolean> {
+  try {
+    return (await readConsent($)).scan !== 'no'
+  } catch {
+    return false
+  }
+}
+
+/** Save the answer about reading past chats. False when it could not be saved. */
+export async function setScan($: EngineInterface, scan: 'yes' | 'no'): Promise<boolean> {
+  try {
+    await $.fs.write(await fileOf($, CONSENT), JSON.stringify({ scan, scanV: SCAN_V }) + '\n')
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** The learn commands and the Learn button: ask first unless the yes is current, save, then read. */
+export async function learnFromPast($: EngineInterface, opts: { days?: number; profile?: boolean } = {}): Promise<string> {
+  if (!isCurrentYes(await readConsent($))) {
+    const answer = await askLearn($, opts.days ?? 0, '')
+    if (answer === null) return 'Nothing was read. Type /budget learn to be asked again.'
+    if (!(await setScan($, answer))) return 'The answer could not be saved, so nothing was read. Try again.'
+    if (answer === 'no') return 'Nothing was read. The estimates use the 430 measured tasks and the tasks you run with /budget.'
+  }
+  return scanStart($, opts)
+}
+
+/** The question about reading past chats. It says what an estimate then sends. Null: no answer. */
+export async function askLearn($: EngineInterface, days: number, baseLine: string): Promise<'yes' | 'no' | null> {
+  try {
+    const answer = await $.ui.ask(
+      [
+        days ? `Read your last ${days} days of chats to learn how you work?` : 'Read your past chats to learn how you work?',
+        'Yes: the mod reads the chat files on this computer. It learns your kinds of task, what each costs, and which models and effort levels you use. What it learns stays on this computer, but an estimate for a /budget task sends the model up to 5 short pieces (160 characters each) of your past prompts that look like the new task, from any project.',
+        'Not now: the estimates start from 430 measured tasks. You can run it later with /budget learn.',
+        ...(baseLine ? [baseLine] : []),
+      ].join('\n'),
+      { options: ['Yes', 'Not now'], header: 'Budget' },
+    )
+    if (answer === null || answer === undefined) return null
+    return /^y/i.test(String(answer).trim()) ? 'yes' : 'no'
+  } catch {
+    return null
+  }
 }
 
 /** Start to read the past chats the book has not read. Newest first. Returns a line for the person. */
 export async function scanStart($: EngineInterface, opts: { days?: number; profile?: boolean } = {}): Promise<string> {
   if (mem.job) return 'The mod is reading your past chats now.'
+  if (!(await isLearnOn($))) return 'Reading past chats is off. Type /budget learn to turn it on.'
   const now = await $.clock.now()
   let sid = ''
   try {
@@ -1068,16 +1169,19 @@ export async function estimate($: EngineInterface, task: string): Promise<Made> 
   }
   const effort = await effortNow($)
   const facts: Facts = { model, ctx, isCold: isFresh, before: await lastAnswer($), ...(effort ? { effort } : {}) }
-  const matches = book ? similarTurns(book.turns, task, 5) : []
+  // Pieces of past prompts go to the model only after a yes to the question that says so (0.8.1).
   // Added in the subagent fixes (fix 13): the learning memory. Never fatal.
   const memo = await readMemory($, task).catch(() => null)
+  // Pieces of past prompts go to the model only after a yes to the question that says so, read again just
+  // before the call (0.8.1). The learning memory goes without its sample tasks, so it adds no prompt text.
+  const matches = book && isCurrentYes(await readConsent($)) ? similarTurns(book.turns, task, 5) : []
   let paidFor = 0
   try {
     const r = await $.model.complete({
       model: EST_MODEL,
       effort: EST_EFFORT,
       system: SPEC,
-      prompt: buildPrompt(task, facts, matches, memo?.text ?? ''),
+      prompt: buildPrompt(task, facts, matches, withoutSamples(memo?.text ?? '')),
       maxTokens: 1600,
       timeoutMs: 45_000,
     })
@@ -1140,7 +1244,9 @@ export const SCAN_DAYS = 7
 export async function firstRun($: EngineInterface, token: string): Promise<void> {
   if (token) return
   const log = await loadLog($)
-  if (log.scan) return
+  // A yes given before 0.8.1 did not name the excerpts an estimate sends: ask again.
+  const consent = await readConsent($)
+  if (consent.scan === 'no' || isCurrentYes(consent)) return
   // The chat start is different for each person: measure it now, so the first estimate has the real number.
   let baseLine = ''
   try {
@@ -1155,25 +1261,14 @@ export async function firstRun($: EngineInterface, token: string): Promise<void>
   } catch {
     baseLine = ''
   }
-  let answer: string | null = null
-  try {
-    answer = await $.ui.ask(
-      [
-        `Read your last ${SCAN_DAYS} days of chats to learn how you work?`,
-        'Yes: the mod reads the chat files on this computer. It learns your kinds of task, what each costs, and which models and effort levels you use. Nothing leaves this computer.',
-        'Not now: the estimates start from 430 measured tasks. You can run it later with /budget learn.',
-        ...(baseLine ? [baseLine] : []),
-      ].join('\n'),
-      { options: ['Yes', 'Not now'], header: 'Budget' },
-    )
-  } catch {
-    answer = null
-  }
+  const answer = await askLearn($, SCAN_DAYS, baseLine)
   // No answer: the question comes again the next time.
   if (answer === null) return
-  const isYes = /^y/i.test(answer.trim())
-  await setScan($, isYes ? 'yes' : 'no')
-  if (isYes) $.ui.toast(await scanStart($, { days: SCAN_DAYS, profile: true }))
+  if (!(await setScan($, answer))) {
+    $.ui.toast('Your answer could not be saved. The question comes again next time.')
+    return
+  }
+  if (answer === 'yes') $.ui.toast(await scanStart($, { days: SCAN_DAYS, profile: true }))
 }
 
 /** The estimate in words, with its odds. Only a counted estimate has measured odds. A first guess names its range and no share. */
@@ -1971,11 +2066,20 @@ export async function handoff($: EngineInterface, b: Budget, spent: number, isIn
       isCopied = false
     }
   }
-  const file = await fileOf($, HANDOFF_FILE)
-  await $.fs.write(file, note + '\n').catch(() => undefined)
+  const path = await fileOf($, HANDOFF_FILE)
+  const isSaved = await $.fs.write(path, note + '\n').then(() => true, () => false)
+  // An old note may still be in the file: name the file only when this note is in it.
+  const file = isSaved ? path : ''
   await update($, budget, c0 => (live(c0)?.id === b.id ? { ...(live(c0) ?? b), spent, isPaused: true, isMidTurn: true, isHandedOff: true, waiting: '', ask: null } : c0))
   $.ui.status(statusText({ ...b, spent, isPaused: true }))
-  $.ui.toast(isCopied ? `Handoff note copied. Open a new chat on ${word} and paste it.` : `The copy did not work. The note is in ${file}. Open a new chat on ${word} and paste it.`)
+  $.ui.toast(
+    isCopied
+      ? `Handoff note copied. Open a new chat on ${word} and paste it.`
+      : isSaved
+        ? `The copy did not work. The note is in ${file}. Open a new chat on ${word} and paste it.`
+        : `The copy and the save did not work. The note is in the card in the chat. Open a new chat on ${word} and paste it.`,
+  )
+  // With no copy and no file, the card shows the note itself, so it is not lost when the agents stop.
   await placeCard($, `hand-${b.id}-${b.steps}`, { kind: 'handoff', note, model: word, isCopied, file })
   void saveRun($, runOf({ ...b, spent }, 'stopped', iso(await $.clock.now()))).catch(() => undefined)
   await stopAgents($, b, { isAbort: !isInStep })
@@ -2039,8 +2143,9 @@ export async function handoffNow($: EngineInterface): Promise<string> {
   if (!b) return HELP
   if (!handoffModel(b.lastModel || b.model)) return 'This task already runs on the cheapest model. Choose Raise the limit or Stop.'
   const usage = await $.session.usage()
+  // handoff() shows the real result (copied, saved, or neither) itself, so nothing more is said here.
   await handoff($, b, spentOf(b, usage.cost?.usd))
-  return mem.handoffAsk || (await handoffRequest($)) ? 'The Handoff panel opens above the prompt box.' : 'Handoff note copied. Open a new chat on a cheaper model and paste it.'
+  return ''
 }
 
 

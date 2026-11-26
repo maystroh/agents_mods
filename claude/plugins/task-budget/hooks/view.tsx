@@ -4,7 +4,7 @@ import type { Register } from 'claude-code'
 import type { Budget, Card, Run } from '../types'
 import { OFFER, PANE } from './names.ts'
 import { ACCENT, BAD, GOOD, TRACK, WARN, bandLine, round2, costVerdict, verdict, forecast, modLines, hitLine, isHit, moneyParts, isOver, label, live, nextCost, reserveSpent, share, suggestAdd, defaultLimit, handoffModel, raiseTo, taskCost, tone, unit, usd } from './core.ts'
-import { adjust, changeLimit, clearOffer, doneNow, endNow, handoffNow, kTokens, keepGoing, land, offerSoon, openPanel, raise, SCAN_DAYS, scanStart, setScan, start, startOffer, stopNow } from './engine.ts'
+import { adjust, changeLimit, clearOffer, doneNow, endNow, handoffNow, kTokens, keepGoing, land, offerSoon, openPanel, raise, SCAN_DAYS, learnFromPast, scanStart, setScan, start, startOffer, stopNow } from './engine.ts'
 import { curvePoints, kindLabel, oddsLine, overOdds } from './estimator.ts'
 import { family } from './book.ts'
 import { CURVE_H, curveSvg, kindsSvg, pastSvg, rangeSvg, SPLIT_H, SPLIT_TINTS, splitSvg } from './charts.ts'
@@ -178,10 +178,17 @@ export function registerViews(on: Parameters<Register>[0]): void {
             <Text>The Handoff panel above the prompt box writes a full handoff of this chat. Press Start new chat there, then pick {card.model}.</Text>
           ) : (
             <Text>
-              {card.isCopied ? 'The handoff note is copied.' : 'The copy did not work. Copy the note from the file below.'} Open a new chat, pick {card.model}, and paste the note.
+              {card.isCopied ? 'The handoff note is copied.' : card.file ? 'The copy did not work. Copy the note from the file below.' : 'The copy and the save did not work. Copy the note below.'} Open a new chat, pick {card.model}, and paste the note.
             </Text>
           )}
-          <Text dimColor>{card.isPanel ? 'A short note is also in' : 'The note is also in'} {card.file}. Claude stopped here. No work is lost.</Text>
+          {card.file ? (
+            <Text dimColor>{card.isPanel ? 'A short note is also in' : 'The note is also in'} {card.file}. Claude stopped here. No work is lost.</Text>
+          ) : (
+            <>
+              <Text>{card.note}</Text>
+              <Text dimColor>Claude stopped here. No work is lost.</Text>
+            </>
+          )}
         </Box>
       )
     }
@@ -350,7 +357,7 @@ export function registerViews(on: Parameters<Register>[0]): void {
           </Text>
           <Box flexDirection="row" gap={1}>
             <Button key="raise" label={`Raise the limit to ${usd(to)}`} variant="primary" onPress={async () => { $.ui.toast((await changeLimit($, to)).text) }} />
-            {cheaper && !b.isHandedOff ? <Button key="handoff" label="Hand off to a cheaper model" onPress={async () => { $.ui.toast(await handoffNow($)) }} /> : null}
+            {cheaper && !b.isHandedOff ? <Button key="handoff" label="Hand off to a cheaper model" onPress={async () => { const t = await handoffNow($); if (t) $.ui.toast(t) }} /> : null}
             <Button key="end" label="End budget" onPress={async () => { $.ui.toast(await endNow($)) }} />
             <Button key="panel" label="Open Budget Panel" onPress={() => openPanel($)} />
           </Box>
@@ -762,7 +769,7 @@ export function registerViews(on: Parameters<Register>[0]): void {
           {proofRows}
           {bookRows}
           {pastRows}
-          {view?.state === 'reading' ? null : <Button key="learn" label={`Learn from my last ${SCAN_DAYS} days of chats`} onPress={async () => { await setScan($, 'yes'); $.ui.toast(await scanStart($, { days: SCAN_DAYS, profile: true })) }} />}
+          {view?.state === 'reading' ? null : <Button key="learn" label={`Learn from my last ${SCAN_DAYS} days of chats`} onPress={async () => { $.ui.toast(await learnFromPast($, { days: SCAN_DAYS, profile: true })) }} />}
         </Box>
       )
     }
@@ -986,7 +993,7 @@ export function registerViews(on: Parameters<Register>[0]): void {
             // Changed in the subagent fixes: the same buttons as the pause question.
             <Box flexDirection="row" gap={1}>
               <Button key="raise" label={`Raise the limit to ${usd(raiseTo(b, perRequest(b), f))}`} variant={b.isPaused ? 'primary' : 'secondary'} onPress={async () => { $.ui.toast((await changeLimit($, raiseTo(b, perRequest(b), forecast(b)))).text) }} />
-              {handoffModel(b.lastModel || b.model) && !b.isHandedOff ? <Button key="handoff" label="Hand off to a cheaper model" onPress={async () => { $.ui.toast(await handoffNow($)) }} /> : null}
+              {handoffModel(b.lastModel || b.model) && !b.isHandedOff ? <Button key="handoff" label="Hand off to a cheaper model" onPress={async () => { const t = await handoffNow($); if (t) $.ui.toast(t) }} /> : null}
               {b.isPaused ? <Button key="end" label="End budget" onPress={async () => { $.ui.toast(await endNow($)) }} /> : <Button key="stop" label="Stop" onPress={async () => { $.ui.toast(await stopNow($)) }} />}
             </Box>
           )}

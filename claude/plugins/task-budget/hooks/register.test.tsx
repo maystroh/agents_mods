@@ -6,6 +6,7 @@ import { startGuess, AGENT_STOP_DENY, FORK_DENY, SPAWN_STOP_DENY, HANDED_OFF, HE
 import { curveSvg } from './charts.ts'
 import { family } from './book.ts'
 import { renderAll } from './memory.ts'
+import { withoutSamples } from './engine.ts'
 import { bandLine as bandLineOf } from './core.ts'
 
 // Hook tests for Task Budget 0.5.0. Each `on` here sits beneath the mod and stands for the engine.
@@ -128,7 +129,7 @@ type World = {
 /** What the mod wrote with $.ui.log since the last /budget. The model never sees this text. */
 let logged: string[] = []
 
-type Opts = { model?: string; tokens?: number | null; breakdown?: number; /** Added for fix 3: the rows of each breakdown call, by its number from 0. */ rows?: (i: number) => object[]; cwd?: string; messages?: unknown[]; files?: Record<string, string>; answer?: string | null; hasExists?: boolean }
+type Opts = { model?: string; tokens?: number | null; breakdown?: number; /** Added for fix 3: the rows of each breakdown call, by its number from 0. */ rows?: (i: number) => object[]; cwd?: string; messages?: unknown[]; files?: Record<string, string>; answer?: string | null; hasExists?: boolean; /** Review fix: no clipboard, and writes to paths it matches fail. */ noCopy?: boolean; failWrite?: RegExp }
 
 /**
  * A session that has spent `usd` so far. `tokens: null` is a chat before its first answer.
@@ -154,6 +155,7 @@ function engine(on: On, usd: number, opts: Opts = {}): World {
     return { value: undefined }
   }) as never)
   on('ui.copy', ((_: unknown, e: any) => {
+    if (opts.noCopy) return { value: { isCopied: false } }
     w.copied.push(String(e.text))
     return { value: { isCopied: true } }
   }) as never)
@@ -179,6 +181,7 @@ function engine(on: On, usd: number, opts: Opts = {}): World {
   // An empty text reads like a file that is not there: the mod then starts from nothing.
   on('fs.read', ((_: unknown, e: any) => ({ value: w.files.get(e.path) ?? '' })) as never)
   on('fs.write', ((_: unknown, e: any) => {
+    if (opts.failWrite?.test(String(e.path))) throw new Error('disk full')
     w.files.set(e.path, String(e.text))
     w.writes.push({ path: e.path, text: String(e.text) })
     return { value: undefined }
@@ -2435,6 +2438,7 @@ for (const args of ['finish', 'end', 'set 3']) {
 test('/budget panel opens the panel, and /budget learn with no past chats says so', async ($, on) => {
   engine(on, 1.47)
   store(on)
+  person(on, [], 'Yes')
   expect((await cmd($, 'panel'))?.text).toBe('Budget panel opened.')
   expect((await cmd($, 'open'))?.text).toBe('Budget panel opened.')
   expect((await cmd($, 'learn'))?.text).toBe('There are no past chats to read yet.')
@@ -2495,7 +2499,7 @@ test('the first /budget asks one time to read the last 7 days of chats, and keep
   expect(p.scans.length).toBe(1)
   expect(String(p.scans[0]?.question).split('\n')[0]).toBe('Read your last 7 days of chats to learn how you work?')
   expect(p.scans[0]?.options.map((o: any) => o.label)).toEqual(['Yes', 'Not now'])
-  expect(JSON.parse(String(w.files.get(fileAt('task-budget-history.json')))).scan).toBe('yes')
+  expect(JSON.parse(String(w.files.get(fileAt('task-budget-consent.json')))).scan).toBe('yes')
   // The estimate still comes, and the second /budget does not ask again.
   expect(p.questions.length).toBe(1)
   await cmd($, 'fix the other report in the files')
@@ -2506,7 +2510,7 @@ test('the first /budget asks one time to read the last 7 days of chats, and keep
   expect(get('budget')).toBeFalsy()
 })
 
-test('Not now on the first-run question is kept, and /budget learn turns the reading on', async ($, on) => {
+test('Not now on the first-run question is kept, and /budget learn asks again before it turns the reading on', async ($, on) => {
   const w = engine(on, 1.47, { tokens: 100_000, answer: JSON.stringify(ANSWER) })
   store(on)
   const p = person(on, ['Not now'], 'Not now')
@@ -2514,9 +2518,12 @@ test('Not now on the first-run question is kept, and /budget learn turns the rea
   await w.clock.advance(100)
   await w.clock.settle()
   expect(p.scans.length).toBe(1)
-  expect(JSON.parse(String(w.files.get(fileAt('task-budget-history.json')))).scan).toBe('no')
-  await cmd($, 'learn')
-  expect(JSON.parse(String(w.files.get(fileAt('task-budget-history.json')))).scan).toBe('yes')
+  expect(JSON.parse(String(w.files.get(fileAt('task-budget-consent.json')))).scan).toBe('no')
+  // Review fix (0.8.1): /budget learn asks with the disclosure first; Not now keeps the reading off.
+  expect((await cmd($, 'learn'))?.text).toBe('Nothing was read. The estimates use the 430 measured tasks and the tasks you run with /budget.')
+  expect(p.scans.length).toBe(2)
+  expect(String(p.scans[1]?.question)).toContain('up to 5 short pieces')
+  expect(JSON.parse(String(w.files.get(fileAt('task-budget-consent.json')))).scan).toBe('no')
 })
 
 test('the advice: Switch runs the requests of this task on the model and effort level that fit', async ($, on) => {
@@ -3757,4 +3764,54 @@ test('dry run of the paid test, real order: a big first request, 3 subagents, on
   expect(b?.asks?.length).toBe(1)
   expect(seen.stops.sort()).toEqual(['sub-1', 'sub-2', 'sub-3'])
   expect(seen.aborts).toEqual(['main-1'])
+})
+
+test('review fix: with no clipboard and no file, the handoff card holds the note and the toast says so', async ($, on) => {
+  const w = engine(on, 5.3, { noCopy: true, failWrite: /task-budget-handoff\.md$/ })
+  store(on, { budget: running({ isPaused: true, isMidTurn: true, spent: 5.3, ownSpend: 5.3 }) })
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  await ui.press({ key: 'handoff' })
+  expect(w.files.has(fileAt('task-budget-handoff.md'))).toBe(false)
+  expect(w.toasts).toContain('The copy and the save did not work. The note is in the card in the chat. Open a new chat on Sonnet and paste it.')
+  // The last word the person sees is the real result, not "copied".
+  expect(w.toasts[w.toasts.length - 1]).toBe('The copy and the save did not work. The note is in the card in the chat. Open a new chat on Sonnet and paste it.')
+  expect(w.toasts.some(t => t.startsWith('Handoff note copied'))).toBe(false)
+  expect(w.placed.some(id => id.startsWith('hand-b1-'))).toBe(true)
+  await ui.unmount()
+})
+
+test('review fix: a yes saved before 0.8.1 asks again, and sends no past prompts until then', async ($, on) => {
+  const w = engine(on, 1.47, { tokens: 100_000, answer: JSON.stringify(ANSWER), files: { 'task-budget-history.json': JSON.stringify({ runs: [], scan: 'yes' }) } })
+  store(on)
+  const p = person(on, ['Not now'], 'Not now')
+  await cmd($, 'fix the report in the files')
+  await w.clock.advance(100)
+  await w.clock.settle()
+  expect(p.scans.length).toBe(1)
+  expect(String(p.scans[0]?.question)).toContain('up to 5 short pieces')
+  expect(JSON.parse(String(w.files.get(fileAt('task-budget-consent.json')))).scan).toBe('no')
+  expect(w.asked.every(a => !String(a.prompt ?? '').includes('PAST TASKS OF THIS USER, WITH REAL COUNTS'))).toBe(true)
+})
+
+test('review fix: /budget learn asks with the disclosure before it saves a yes', async ($, on) => {
+  const w = engine(on, 1.47, { tokens: 100_000, answer: JSON.stringify(ANSWER) })
+  store(on)
+  const p = person(on, [], 'Yes')
+  expect((await cmd($, 'learn'))?.text).toBe('There are no past chats to read yet.')
+  expect(p.scans.length).toBe(1)
+  expect(String(p.scans[0]?.question)).toContain('up to 5 short pieces')
+  expect(JSON.parse(String(w.files.get(fileAt('task-budget-consent.json'))))).toEqual({ scan: 'yes', scanV: 2 })
+  // A current yes is not asked again.
+  await cmd($, 'learn')
+  expect(p.scans.length).toBe(1)
+})
+
+test('review fix: /budget learn off says so when the answer cannot be saved', async ($, on) => {
+  engine(on, 1.47, { failWrite: /task-budget-consent\.json$/ })
+  store(on)
+  expect((await cmd($, 'learn off'))?.text).toBe('The answer could not be saved: the mod may still read your past chats in other chats. Try /budget learn off again.')
+})
+
+test('review fix: the learning memory goes to the model without its sample tasks', async () => {
+  expect(withoutSamples('# t\n## Sample tasks\n- "secret plan for client X"\n- "another"\n\n## Cost by model and effort\n| a |')).toBe('# t\n\n## Cost by model and effort\n| a |')
 })
