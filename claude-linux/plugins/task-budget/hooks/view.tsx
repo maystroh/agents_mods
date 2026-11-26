@@ -4,7 +4,7 @@ import type { Register } from 'claude-code'
 import type { Budget, Card, Run } from '../types'
 import { OFFER, PANE } from './names.ts'
 import { ACCENT, BAD, GOOD, TRACK, WARN, bandLine, round2, costVerdict, verdict, forecast, modLines, hitLine, isHit, moneyParts, isOver, label, live, nextCost, reserveSpent, share, suggestAdd, defaultLimit, handoffModel, raiseTo, taskCost, tone, unit, usd } from './core.ts'
-import { adjust, changeLimit, clearOffer, doneNow, endNow, handoffNow, kTokens, keepGoing, land, offerSoon, openPanel, raise, SCAN_DAYS, scanStart, setScan, start, startOffer, stopNow } from './engine.ts'
+import { adjust, changeLimit, clearOffer, doneNow, endNow, handoffNow, kTokens, keepGoing, land, offerSoon, openPanel, raise, SCAN_DAYS, learnFromPast, scanStart, setScan, start, startOffer, stopNow } from './engine.ts'
 import { curvePoints, kindLabel, oddsLine, overOdds } from './estimator.ts'
 import { family } from './book.ts'
 import { CURVE_H, curveSvg, kindsSvg, pastSvg, rangeSvg, SPLIT_H, SPLIT_TINTS, splitSvg } from './charts.ts'
@@ -769,7 +769,7 @@ export function registerViews(on: Parameters<Register>[0]): void {
           {proofRows}
           {bookRows}
           {pastRows}
-          {view?.state === 'reading' ? null : <Button key="learn" label={`Learn from my last ${SCAN_DAYS} days of chats`} onPress={async () => { await setScan($, 'yes'); $.ui.toast(await scanStart($, { days: SCAN_DAYS, profile: true })) }} />}
+          {view?.state === 'reading' ? null : <Button key="learn" label={`Learn from my last ${SCAN_DAYS} days of chats`} onPress={async () => { $.ui.toast(await learnFromPast($, { days: SCAN_DAYS, profile: true })) }} />}
         </Box>
       )
     }

@@ -81,11 +81,13 @@ async function helperFiles(io: Io, dir: string, depth: number): Promise<{ path: 
 }
 
 /** One main chat and its helper chats. Null when the main chat cannot be read. */
-export async function readSession(io: Io, file: SessionFile): Promise<{ main: Scan; subs: Scan[] } | null> {
+export async function readSession(io: Io, file: SessionFile, isStopped?: () => boolean | Promise<boolean>): Promise<{ main: Scan; subs: Scan[] } | null> {
   const main = await readAny(io, file.path, file.size)
   if (!main) return null
   const subs: Scan[] = []
   for (const h of await helperFiles(io, `${file.dir}/subagents`, 0)) {
+    // Stopped (learning turned off) while this chat was read: open no more of its helper chats.
+    if (await isStopped?.()) return null
     const scan = await readAny(io, h.path, h.size)
     if (scan) subs.push(scan)
   }
@@ -97,7 +99,7 @@ export type Limits = {
   maxBytes: number
   /** A file to leave out, such as the chat that is open now. */
   skip?: (file: SessionFile) => boolean
-  isStopped?: () => boolean
+  isStopped?: () => boolean | Promise<boolean>
 }
 
 export type Progress = { read: number; left: number; added: number; skipped: number }
@@ -118,8 +120,8 @@ export async function scanSome(
   let i = 0
   for (; i < todo.length; i++) {
     const f = todo[i]
-    if (!f || read >= limits.maxFiles || bytes >= limits.maxBytes || limits.isStopped?.()) break
-    const got = await readSession(io, f).catch(() => null)
+    if (!f || read >= limits.maxFiles || bytes >= limits.maxBytes || (await limits.isStopped?.())) break
+    const got = await readSession(io, f, limits.isStopped).catch(() => null)
     if (!got) {
       skipped += 1
       book.skipped += 1
