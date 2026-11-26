@@ -3,7 +3,7 @@
   "owner": {
     "name": "Team mods"
   },
-  "description": "Ten Claude Code mods for everyday knowledge work: prompt shaping, a task bar, a cache clock, handoffs, saved rules, side panes, screen-share hiding, an edit replay, an effort picker and a /mods switchboard",
+  "description": "Eleven Claude Code mods for everyday knowledge work: prompt shaping, a task bar, a cache clock, handoffs, saved rules, side panes, screen-share hiding, an edit replay, an effort picker, a task budget and a /mods switchboard",
   "plugins": [
     {
       "name": "brain-dump",
@@ -64,6 +64,12 @@
       "source": "./plugins/screen-share",
       "description": "/screen-share draws emails, phone numbers, money amounts and names as shaded bars on screen for recording, while Claude still reads the real data",
       "version": "0.2.0"
+    },
+    {
+      "name": "task-budget",
+      "source": "./plugins/task-budget",
+      "description": "Estimates what a task will cost before Claude starts, counts the real cost live, and pauses the chat before a dollar limit. Type /budget and your task",
+      "version": "0.8.0"
     }
   ]
 }

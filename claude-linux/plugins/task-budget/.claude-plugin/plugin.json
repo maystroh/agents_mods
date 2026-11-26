@@ -1,0 +1,17 @@
+{
+  "name": "task-budget",
+  "version": "0.8.0",
+  "description": "Know what a task will cost before Claude starts. The mod gives a likely cost with odds from your own past chats, advises a cheaper model or effort level when the task fits one, counts the real cost live, and pauses the chat before a dollar limit is passed. It learns from every task. Past chats are read on this machine only, after you say yes.",
+  "author": {
+    "name": "Ben AI"
+  },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "forceHelperModel": {
+      "type": "boolean",
+      "title": "Subagents on Sonnet or Haiku",
+      "description": "On: every subagent in every chat runs on Sonnet or Haiku, never Opus or Fable, at medium effort at most. Off: only the subagents of a /budget task are capped.",
+      "default": true
+    }
+  }
+}
